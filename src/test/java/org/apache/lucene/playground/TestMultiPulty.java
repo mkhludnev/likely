@@ -29,7 +29,7 @@ public class TestMultiPulty extends LuceneTestCase {
         // these props seem crucial
         dumb.setSplitOnWhitespace(true);
         dumb.setAutoGeneratePhraseQueries(true);
-        assertEquals("field:\"application program interface\" field:\"user interface\"",
+        assertEquals("(field:\"application program interface\" field:api) (field:\"user interface\" field:ui)",
                 dumb.parse("API UI").toString());
     }
 }
