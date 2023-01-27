@@ -17,12 +17,19 @@ public class TestMultiPulty extends LuceneTestCase {
         Analyzer ana = CustomAnalyzer.builder(new ClasspathResourceLoader(TestMultiPulty.class))
                 .withTokenizer(StandardTokenizerFactory.NAME)
                 .addTokenFilter(LowerCaseFilterFactory.NAME)
-                .addTokenFilter(SynonymGraphFilterFactory.NAME, "synonyms", "multy-syn.txt")
+                .addTokenFilter(SynonymGraphFilterFactory.NAME, "synonyms", "multy-syn.txt",
+                        "ignoreCase", "true") // must, since I have caps in synonyms
                 .build();
         QueryParser dumb = new QueryParser("field", ana);
         assertEquals("just booleans", "((+field:bot +field:net) (+field:wifi +field:router))",
                 dumb.parse("wifi router").toString());
         assertEquals("phrases", "field:\"bot net\" field:\"wifi router\"",
                 dumb.parse("\"wifi router\"").toString());
+
+        // these props seem crucial
+        dumb.setSplitOnWhitespace(true);
+        dumb.setAutoGeneratePhraseQueries(true);
+        assertEquals("field:\"application program interface\" field:\"user interface\"",
+                dumb.parse("API UI").toString());
     }
 }
