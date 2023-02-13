@@ -23,51 +23,57 @@ public class TestLikelyReader extends LuceneTestCase {
     public void testFoo() throws IOException, ParseException {
         final BaseDirectoryWrapper directory = newDirectory();
         final IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig());
+        int cnt = 1;
         for(String darkColor : Arrays.asList("black", "green","blue")){
-            index(writer, darkColor, "tractor");
-            index(writer, darkColor, "truck");
+            index(writer, darkColor, "tractor", cnt);
+            index(writer, darkColor, "truck", cnt);
+            cnt++;
         }
+        cnt = 1;
         for(String lightColor : Arrays.asList("white", "pink","azure")){
-            index(writer, lightColor, "yacht");
-            index(writer, lightColor, "car");
+            index(writer, lightColor, "yacht", cnt);
+            index(writer, lightColor, "car", cnt);
+            cnt ++;
         }
-        index(writer, "black", "car");
-        index(writer, "white", "tractor");
+        cnt = 1;
+        index(writer, "black", "car", cnt);
+        index(writer, "white", "tractor", cnt);
 
         final DirectoryReader reader = DirectoryReader.open(writer, true, true);
         writer.close();
         final MultiFieldQueryParser parser = new MultiFieldQueryParser(new String[]{"thing", "color"}, new StandardAnalyzer());
-        {
-            final LikelyReader likelyReader = new LikelyReader(reader);
-            final IndexSearcher likelySearcher = new IndexSearcher(likelyReader);
-            final IndexSearcher searcher = new IndexSearcher(reader);
-            {
-                final float existing = isExpected(parser.parse("black car"), likelySearcher, searcher);
 
-                final float absent = isExpected(parser.parse("azure tractor"), likelySearcher, searcher);
-                System.out.println(existing + " > " + absent);
-                assertTrue(existing > absent);
-            }
-        }
+        final LikelyReader likelyReader = new LikelyReader(reader);
+        final IndexSearcher likelySearcher = new IndexSearcher(likelyReader);
+        final IndexSearcher searcher = new IndexSearcher(reader);
+
+        final float existing = isExpected(parser.parse("black car"), likelySearcher, searcher);
+        final float absent = isExpected(parser.parse("azure tractor"), likelySearcher, searcher);
+        System.out.println(existing + " > " + absent);
+        assertTrue(existing > absent);
+
         reader.close();
         directory.close();
     }
 
-    private static float isExpected(Query black_car, IndexSearcher likelySearcher,
+    private static float isExpected(Query query, IndexSearcher likelySearcher,
                                     IndexSearcher searcher) throws ParseException, IOException {
-        final TopDocs topDocs = likelySearcher.search(black_car, 1);
+        final TopDocs topDocs = likelySearcher.search(query, 1);
         float maxScoreEst = topDocs.scoreDocs[0].score;
-        System.out.println(topDocs.scoreDocs[0]);
+        ///System.out.println(topDocs.scoreDocs[0]);
 
-        final TopDocs topDocsAct = searcher.search(black_car, 1);
+        final TopDocs topDocsAct = searcher.search(query, 1);
         final float maxScoreAct = topDocsAct.scoreDocs[0].score;
         return maxScoreAct / maxScoreEst;
     }
 
-    private static void index(IndexWriter writer, String color, String thing) throws IOException {
+    private static void index(IndexWriter writer, String color, String thing, int tf) throws IOException {
         final Document document = new Document();
-        document.add(new TextField("thing", color, Field.Store.YES));
-        document.add(new TextField("color", thing, Field.Store.YES));
+        assert tf>0;
+        for (int i=0; i<tf; i++) { // mocking tf variety
+            document.add(new TextField("thing", color, Field.Store.YES));
+            document.add(new TextField("color", thing, Field.Store.YES));
+        }
         writer.addDocument(document);
     }
 }

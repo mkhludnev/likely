@@ -68,7 +68,7 @@ public class LikelyReader extends LeafReader {
                     public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
                         final DocIdSetIterator aDoc = DocIdSetIterator.all(1);
                         final DocIdSetIterator aPos = DocIdSetIterator.all(1);
-                        int tf = estimateTf(in.totalTermFreq(), in.docFreq(), maxDoc());
+                        int tf = estimateMaxTf(in.totalTermFreq(), in.docFreq(), maxDoc());
                         //final PostingsEnum postings = origin.postings(reuse, flags);
                         return new PostingsEnum() {
                             @Override
@@ -128,12 +128,12 @@ public class LikelyReader extends LeafReader {
         };
     }
 
-    private static int estimateTf(long totalTermFreq, int docFreq, int maxDoc) {
+    private static int estimateMaxTf(long totalTermFreq, int docFreq, int maxDoc) {
         int tf=0;
         for (; docFreq > 0 && maxDoc > 0 && totalTermFreq > docFreq; tf+=1 ){
             totalTermFreq -= docFreq;
             int newDiv= docFreq * docFreq / maxDoc;
-            maxDoc = docFreq;//+1
+            maxDoc = docFreq;//+1 ???
             docFreq = newDiv;
         }
         tf += totalTermFreq;
