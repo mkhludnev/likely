@@ -4,30 +4,25 @@ import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.CompositeReader;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.FilterDirectoryReader;
 import org.apache.lucene.index.FilterLeafReader;
 import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafMetaData;
 import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.StoredFieldVisitor;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.index.VectorValues;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 
@@ -73,24 +68,12 @@ public class LikelyReader extends LeafReader {
                     public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
                         final DocIdSetIterator aDoc = DocIdSetIterator.all(1);
                         final DocIdSetIterator aPos = DocIdSetIterator.all(1);
-                        int divident = in.docFreq();
-                         long total = in.totalTermFreq();
-                        int divisor = maxDoc();
-                        int tf=0;
-                        for ( ; divident>0 && divisor>0; tf+=1 ){
-                            total -= divident;
-                            int newDiv=divident*divident/divisor;
-                            divisor = divident;
-                            divident = newDiv;
-                        }
-                        tf +=total
+                        int tf = estimateTf(in.totalTermFreq(), in.docFreq(), maxDoc());
                         //final PostingsEnum postings = origin.postings(reuse, flags);
                         return new PostingsEnum() {
                             @Override
                             public int freq() throws IOException {
-                                // TODO just come up with maxTF
-                                // TODO presumably we need to cap by MAX_INT
-                                return (int) (origin.totalTermFreq()/2);
+                                return tf;
                             }
 
                             @Override
@@ -134,9 +117,27 @@ public class LikelyReader extends LeafReader {
                             }
                         };
                     }
+
+                    @Override
+                    public ImpactsEnum impacts(int flags) throws IOException {
+                        //final ImpactsEnum impacts = super.impacts(flags);
+                        return new SlowImpactsEnum(postings(null,flags));
+                    }
                 };
             }
         };
+    }
+
+    private static int estimateTf(long totalTermFreq, int docFreq, int maxDoc) {
+        int tf=0;
+        for (; docFreq > 0 && maxDoc > 0 && totalTermFreq > docFreq; tf+=1 ){
+            totalTermFreq -= docFreq;
+            int newDiv= docFreq * docFreq / maxDoc;
+            maxDoc = docFreq;//+1
+            docFreq = newDiv;
+        }
+        tf += totalTermFreq;
+        return tf;
     }
 
     @Override
