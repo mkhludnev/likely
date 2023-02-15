@@ -35,9 +35,12 @@ public class TestLikelyReader extends LuceneTestCase {
             index(writer, lightColor, "car", cnt);
             cnt ++;
         }
-        cnt = 1;
-        index(writer, "black", "car", cnt);
-        index(writer, "white", "tractor", cnt);
+        index(writer, "black", "car", 1);
+        index(writer, "white", "tractor", 1);
+        for (int i=0; i<20; i++) { // lets blow up docCount for black car to hurt its score
+            index(writer, "black", "stuff"+i, 1);
+            index(writer, "stuff"+i, "car", 1);
+        }
 
         final DirectoryReader reader = DirectoryReader.open(writer, true, true);
         writer.close();
@@ -47,23 +50,27 @@ public class TestLikelyReader extends LuceneTestCase {
         final IndexSearcher likelySearcher = new IndexSearcher(likelyReader);
         final IndexSearcher searcher = new IndexSearcher(reader);
 
-        final float existing = isExpected(parser.parse("black car"), likelySearcher, searcher);
-        final float absent = isExpected(parser.parse("azure tractor"), likelySearcher, searcher);
-        System.out.println(existing + " > " + absent);
-        assertTrue(existing > absent);
+        final Query bothMatch = parser.parse("black car");
+        final Query weakMatch = parser.parse("azure tractor");
 
+        assertTrue("Weak match has better absolute score, since it scores one of rare terms." +
+                        "It demonstrate that scores between different queries aren't comparable.",
+                searcher.search(bothMatch,1).scoreDocs[0].score < searcher.search(weakMatch,1).scoreDocs[0].score);
+        assertTrue("but if we normalize it with the most probable score, strong match has higher score",
+                howProbable(bothMatch, likelySearcher, searcher) > howProbable(weakMatch, likelySearcher, searcher));
         reader.close();
         directory.close();
     }
 
-    private static float isExpected(Query query, IndexSearcher likelySearcher,
-                                    IndexSearcher searcher) throws ParseException, IOException {
+    private static float howProbable(Query query, IndexSearcher likelySearcher,
+                                     IndexSearcher searcher) throws ParseException, IOException {
         final TopDocs topDocs = likelySearcher.search(query, 1);
         float maxScoreEst = topDocs.scoreDocs[0].score;
-        ///System.out.println(topDocs.scoreDocs[0]);
+
 
         final TopDocs topDocsAct = searcher.search(query, 1);
         final float maxScoreAct = topDocsAct.scoreDocs[0].score;
+        System.out.println(""+query + topDocsAct.scoreDocs[0] + " of " + topDocs.scoreDocs[0] );
         return maxScoreAct / maxScoreEst;
     }
 
