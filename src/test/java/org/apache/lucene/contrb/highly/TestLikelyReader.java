@@ -24,6 +24,7 @@ public class TestLikelyReader extends LuceneTestCase {
     @Test
     public void testFoo() throws IOException, ParseException {
         // docfreq > 128 (blocksize)
+        // hell! it flushes every 200 docs why??
         final BaseDirectoryWrapper directory = newDirectory();
         final IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig());
         int cnt = 1;

@@ -1,32 +1,14 @@
 package org.apache.lucene.contrb.highly;
 
-import org.apache.lucene.index.BinaryDocValues;
-import org.apache.lucene.index.CompositeReader;
-import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.FilterLeafReader;
-import org.apache.lucene.index.ImpactsEnum;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafMetaData;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.index.PointValues;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.SlowImpactsEnum;
-import org.apache.lucene.index.SortedDocValues;
-import org.apache.lucene.index.SortedNumericDocValues;
-import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.lucene.index.StoredFieldVisitor;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.index.VectorValues;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -66,11 +48,60 @@ public class LikelyReader extends LeafReader {
                 return new FilterLeafReader.FilterTermsEnum(origin) {
                     @Override
                     public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+                        return impacts(flags);
+                    }
+
+                    @Override
+                    public ImpactsEnum impacts(int flags) throws IOException {
                         final DocIdSetIterator aDoc = DocIdSetIterator.all(1);
                         final DocIdSetIterator aPos = DocIdSetIterator.all(1);
-                        int tf = estimateMaxTf(in.totalTermFreq(), in.docFreq(), maxDoc());
+                        long minNorm = Long.MAX_VALUE;
+                        int maxFreq = -Integer.MAX_VALUE;
+                        for(LeafReaderContext lrc:LikelyReader.this.origin.leaves()) {
+                            Terms leafTerms = lrc.reader().terms(field);
+                            if (leafTerms!=null) {
+                                TermsEnum iterator = leafTerms.iterator();
+                                if(iterator.seekExact(in.term())){
+                                    ImpactsEnum impactsEnum = iterator.impacts(PostingsEnum.FREQS);
+                                    impactsEnum.advanceShallow(lrc.reader().maxDoc()-1);
+                                    Impacts impactsImpacts = impactsEnum.getImpacts();
+                                    List<Impact> impactList = impactsImpacts.getImpacts(impactsImpacts.numLevels());
+                                    minNorm = Long.min(impactList.get(0).norm, minNorm);
+                                    maxFreq = Integer.max(impactList.get(impactList.size() - 1).freq, maxFreq);
+                                }
+                            }
+                        }
+
+                        int tf = maxFreq;
                         //final PostingsEnum postings = origin.postings(reuse, flags);
-                        return new PostingsEnum() {
+                        int finalMaxFreq = maxFreq;
+                        long finalMinNorm = minNorm;
+                        return new ImpactsEnum() {
+                            @Override
+                            public void advanceShallow(int target) throws IOException {
+
+                            }
+
+                            @Override
+                            public Impacts getImpacts() throws IOException {
+                                return new Impacts() {
+                                    @Override
+                                    public int numLevels() {
+                                        return 1;
+                                    }
+
+                                    @Override
+                                    public int getDocIdUpTo(int level) {
+                                        return 1;
+                                    }
+
+                                    @Override
+                                    public List<Impact> getImpacts(int level) {
+                                        return List.of(new Impact(finalMaxFreq, finalMinNorm) );
+                                    }
+                                };
+                            }
+
                             @Override
                             public int freq() throws IOException {
                                 return tf;
@@ -117,27 +148,9 @@ public class LikelyReader extends LeafReader {
                             }
                         };
                     }
-
-                    @Override
-                    public ImpactsEnum impacts(int flags) throws IOException {
-                        //final ImpactsEnum impacts = super.impacts(flags);
-                        return new SlowImpactsEnum(postings(null,flags));
-                    }
                 };
             }
         };
-    }
-
-    private static int estimateMaxTf(long totalTermFreq, int docFreq, int maxDoc) {
-        int tf=0;
-        for (; docFreq > 0 && maxDoc > 0 && totalTermFreq > docFreq; tf+=1 ){
-            totalTermFreq -= docFreq;
-            int newDiv= docFreq * docFreq / maxDoc;
-            maxDoc = docFreq;//+1 ???
-            docFreq = newDiv;
-        }
-        tf += totalTermFreq;
-        return tf;
     }
 
     @Override
@@ -167,6 +180,8 @@ public class LikelyReader extends LeafReader {
 
     @Override
     public NumericDocValues getNormValues(String field) throws IOException {
+
+        // TODO estimate norms from impact
         return null;
     }
 
