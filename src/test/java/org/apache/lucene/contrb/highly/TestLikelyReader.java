@@ -4,10 +4,7 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.index.*;
 import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.search.*;
@@ -26,7 +23,9 @@ public class TestLikelyReader extends LuceneTestCase {
         // docfreq > 128 (blocksize)
         // hell! it flushes every 200 docs why??
         final BaseDirectoryWrapper directory = newDirectory();
-        final IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig());
+        IndexWriterConfig conf = newIndexWriterConfig();
+        conf.setMaxBufferedDocs(10000000);
+        final IndexWriter writer = new IndexWriter(directory, conf);
         int cnt = 1;
         for(String darkColor : Arrays.asList("black", "green","blue")){
             index(writer, darkColor, "tractor", cnt);

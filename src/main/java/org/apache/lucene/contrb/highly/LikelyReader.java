@@ -65,7 +65,7 @@ public class LikelyReader extends LeafReader {
                                     ImpactsEnum impactsEnum = iterator.impacts(PostingsEnum.FREQS);
                                     impactsEnum.advanceShallow(lrc.reader().maxDoc()-1);
                                     Impacts impactsImpacts = impactsEnum.getImpacts();
-                                    List<Impact> impactList = impactsImpacts.getImpacts(impactsImpacts.numLevels());
+                                    List<Impact> impactList = impactsImpacts.getImpacts(impactsImpacts.numLevels()-1);
                                     minNorm = Long.min(impactList.get(0).norm, minNorm);
                                     maxFreq = Integer.max(impactList.get(impactList.size() - 1).freq, maxFreq);
                                 }
